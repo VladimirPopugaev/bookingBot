@@ -7,7 +7,8 @@ import (
 	"github.com/rs/zerolog"
 
 	"booking_bot/internal/domain"
-	telegramApi "booking_bot/internal/repository/telegram_api"
+	telegramRepository "booking_bot/internal/repository/telegram"
+	siteWorkerRepository "booking_bot/internal/repository/site"
 	"booking_bot/internal/usecase"
 )
 
@@ -22,19 +23,31 @@ func New(cfg *domain.Config, log zerolog.Logger) (*App, error) {
 	}
 
 	// create telegram repository
-	telegramCfg := &telegramApi.Config{
+	telegramCfg := &telegramRepository.Config{
 		BotToken: cfg.Telegram.BotToken,
 		BaseURL:  cfg.Telegram.BaseURL,
 		Timeout:  time.Duration(cfg.Telegram.Timeout) * time.Second,
 	}
-	telegramRepo, err := telegramApi.New(telegramCfg, log)
+	telegramRepo, err := telegramRepository.New(telegramCfg, log)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to create telegram repository")
 		return nil, fmt.Errorf("create telegram repository: %w", err)
 	}
 	log.Trace().Msg("Telegram repository created successfully")
 
-	uc, err := usecase.New(telegramRepo, log)
+	// create site worker repository
+	siteWorkerCfg := &siteWorkerRepository.Config{
+		TargetURL: cfg.SiteConfig.TargetURL,
+		Timeout:   time.Duration(cfg.SiteConfig.RequestTimeout) * time.Second,
+	}
+	siteWorkerRepo, err := siteWorkerRepository.New(siteWorkerCfg, log)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create site worker repository")
+		return nil, fmt.Errorf("create site worker repository: %w", err)
+	}
+	log.Trace().Msg("Site worker repository created successfully")
+
+	uc, err := usecase.New(telegramRepo, siteWorkerRepo, log)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to create usecase")
 		return nil, fmt.Errorf("create usecase: %w", err)

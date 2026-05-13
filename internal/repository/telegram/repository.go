@@ -73,7 +73,7 @@ func (c *Config) validate(log zerolog.Logger) error {
 	parsedURL, err := url.ParseRequestURI(c.BaseURL)
 	if err != nil || parsedURL.Scheme == "" || parsedURL.Host == "" {
 		log.Error().Err(err).Str("base_url", c.BaseURL).Msg("Telegram base url is invalid")
-		return fmt.Errorf("bad base url")
+		return domain.ErrUrlParse
 	}
 
 	if c.Timeout <= 0 {
