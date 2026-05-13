@@ -1,0 +1,34 @@
+.idea/
+.vscode/
+AGENTS.md
+PLANS.md
+
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+coverage.out
+
+# Binaries
+/bookingBot
+/bin/
+/dist/
+
+# Dependency and workspace files
+vendor/
+go.work
+go.work.sum
+
+# Environment and local overrides
+.env
+.env.*
+*config*.yml
+*config*.yaml
+
+# OS files
+.DS_Store
+Thumbs.db
