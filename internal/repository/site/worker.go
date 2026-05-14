@@ -14,6 +14,7 @@ import (
 
 const (
 	defaultTimeout = 5 * time.Second
+	defaultMonitoringInterval = 60 * time.Second
 )
 
 // TODO: implement site worker that will check the site for availability
@@ -28,6 +29,7 @@ type worker struct {
 type Config struct {
 	TargetURL string
 	Timeout   time.Duration
+	MonitoringInterval time.Duration
 }
 
 func New(cfg *Config, logger zerolog.Logger) (domain.SiteWorkerRepository, error) {
@@ -52,6 +54,7 @@ func New(cfg *Config, logger zerolog.Logger) (domain.SiteWorkerRepository, error
 		cfg: &Config{
 			TargetURL: cfg.TargetURL,
 			Timeout:   cfg.Timeout,
+			MonitoringInterval: cfg.MonitoringInterval,
 		},
 		collector: collector,
 		log:       log,
@@ -70,9 +73,14 @@ func (c *Config) validate(log zerolog.Logger) error {
 		return domain.ErrURLParse
 	}
 
-	if c.Timeout < 0 {
+	if c.Timeout <= 0 {
 		log.Warn().Dur("timeout", c.Timeout).Msg("Site worker timeout is negative. Using default timeout (5 seconds)")
 		c.Timeout = defaultTimeout
+	}
+
+	if c.MonitoringInterval <= 0 {
+		log.Warn().Dur("monitoring_interval", c.MonitoringInterval).Msg("Site worker monitoring interval is negative. Using default interval (60 seconds)")
+		c.MonitoringInterval = defaultMonitoringInterval
 	}
 
 	return nil

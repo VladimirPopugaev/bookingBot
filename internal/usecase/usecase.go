@@ -29,14 +29,6 @@ func New(
 		cancelFunc:     cancel,
 	}
 
-	// TODO: удалить когда будет реализован полный функционал вызова метода
-	htmlBody, err := uc.siteWorkerRepo.FetchSiteStruct(context.Background())
-	if err != nil {
-		log.Error().Err(err).Msg("Fetch site structure failed")
-		return nil, domain.ErrCollectStruct
-	}
-	log.Trace().Str("site_struct", htmlBody).Msg("Site structure fetched successfully")
-
 	return uc, nil
 }
 

@@ -7,8 +7,8 @@ import (
 	"github.com/rs/zerolog"
 
 	"booking_bot/internal/domain"
-	telegramRepository "booking_bot/internal/repository/telegram"
 	siteWorkerRepository "booking_bot/internal/repository/site"
+	telegramRepository "booking_bot/internal/repository/telegram"
 	"booking_bot/internal/usecase"
 )
 
@@ -37,8 +37,9 @@ func New(cfg *domain.Config, log zerolog.Logger) (*App, error) {
 
 	// create site worker repository
 	siteWorkerCfg := &siteWorkerRepository.Config{
-		TargetURL: cfg.SiteConfig.TargetURL,
-		Timeout:   time.Duration(cfg.SiteConfig.RequestTimeout) * time.Second,
+		TargetURL:          cfg.SiteConfig.TargetURL,
+		Timeout:            time.Duration(cfg.SiteConfig.RequestTimeout) * time.Second,
+		MonitoringInterval: time.Duration(cfg.SiteConfig.MonitoringInterval) * time.Second,
 	}
 	siteWorkerRepo, err := siteWorkerRepository.New(siteWorkerCfg, log)
 	if err != nil {

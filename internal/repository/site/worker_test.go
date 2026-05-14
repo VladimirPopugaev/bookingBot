@@ -24,8 +24,9 @@ func TestNew(t *testing.T) {
 		{
 			name: "valid config",
 			cfg: &Config{
-				TargetURL: "https://example.com",
-				Timeout:   5 * time.Second,
+				TargetURL:          "https://example.com",
+				Timeout:            5 * time.Second,
+				MonitoringInterval: 30 * time.Second,
 			},
 			assertNew: func(t *testing.T, repo any, cfg *Config) {
 				t.Helper()
@@ -50,29 +51,72 @@ func TestNew(t *testing.T) {
 				if workerRepo.cfg.Timeout != cfg.Timeout {
 					t.Fatalf("expected timeout %s, got %s", cfg.Timeout, workerRepo.cfg.Timeout)
 				}
+
+				if workerRepo.cfg.MonitoringInterval != cfg.MonitoringInterval {
+					t.Fatalf(
+						"expected monitoring interval %s, got %s",
+						cfg.MonitoringInterval,
+						workerRepo.cfg.MonitoringInterval,
+					)
+				}
+			},
+		},
+		{
+			name: "default monitoring interval applied",
+			cfg: &Config{
+				TargetURL:          "https://example.com",
+				Timeout:            5 * time.Second,
+				MonitoringInterval: 0,
+			},
+			assertNew: func(t *testing.T, repo any, cfg *Config) {
+				t.Helper()
+
+				workerRepo, ok := repo.(*worker)
+				if !ok {
+					t.Fatalf("expected repository type *worker, got %T", repo)
+				}
+
+				if workerRepo.cfg.MonitoringInterval != defaultMonitoringInterval {
+					t.Fatalf(
+						"expected default monitoring interval %s, got %s",
+						defaultMonitoringInterval,
+						workerRepo.cfg.MonitoringInterval,
+					)
+				}
+
+				if cfg.MonitoringInterval != defaultMonitoringInterval {
+					t.Fatalf(
+						"expected input config monitoring interval to be normalized to %s, got %s",
+						defaultMonitoringInterval,
+						cfg.MonitoringInterval,
+					)
+				}
 			},
 		},
 		{
 			name: "empty target url",
 			cfg: &Config{
-				TargetURL: "",
-				Timeout:   5 * time.Second,
+				TargetURL:          "",
+				Timeout:            5 * time.Second,
+				MonitoringInterval: 30 * time.Second,
 			},
 			wantErr: domain.ErrEmptyParameter,
 		},
 		{
 			name: "blank target url",
 			cfg: &Config{
-				TargetURL: "   ",
-				Timeout:   5 * time.Second,
+				TargetURL:          "   ",
+				Timeout:            5 * time.Second,
+				MonitoringInterval: 30 * time.Second,
 			},
 			wantErr: domain.ErrEmptyParameter,
 		},
 		{
 			name: "invalid target url",
 			cfg: &Config{
-				TargetURL: "://broken-url",
-				Timeout:   5 * time.Second,
+				TargetURL:          "://broken-url",
+				Timeout:            5 * time.Second,
+				MonitoringInterval: 30 * time.Second,
 			},
 			wantErr: domain.ErrURLParse,
 		},
@@ -125,8 +169,9 @@ func TestWorker_FetchSiteStruct(t *testing.T) {
 		defer server.Close()
 
 		repo, err := New(&Config{
-			TargetURL: server.URL,
-			Timeout:   5 * time.Second,
+			TargetURL:          server.URL,
+			Timeout:            5 * time.Second,
+			MonitoringInterval: 30 * time.Second,
 		}, zerolog.Nop())
 		if err != nil {
 			t.Fatalf("expected no error creating repository, got %v", err)
@@ -155,8 +200,9 @@ func TestWorker_FetchSiteStruct(t *testing.T) {
 		server.Close()
 
 		repo, err := New(&Config{
-			TargetURL: serverURL,
-			Timeout:   500 * time.Millisecond,
+			TargetURL:          serverURL,
+			Timeout:            500 * time.Millisecond,
+			MonitoringInterval: 30 * time.Second,
 		}, zerolog.Nop())
 		if err != nil {
 			t.Fatalf("expected no error creating repository, got %v", err)
@@ -186,8 +232,9 @@ func TestWorker_FetchSiteStruct(t *testing.T) {
 		defer server.Close()
 
 		repo, err := New(&Config{
-			TargetURL: server.URL,
-			Timeout:   5 * time.Second,
+			TargetURL:          server.URL,
+			Timeout:            5 * time.Second,
+			MonitoringInterval: 30 * time.Second,
 		}, zerolog.Nop())
 		if err != nil {
 			t.Fatalf("expected no error creating repository, got %v", err)
@@ -219,8 +266,9 @@ func TestWorker_FetchSiteStruct(t *testing.T) {
 		defer server.Close()
 
 		repo, err := New(&Config{
-			TargetURL: server.URL,
-			Timeout:   50 * time.Millisecond,
+			TargetURL:          server.URL,
+			Timeout:            50 * time.Millisecond,
+			MonitoringInterval: 30 * time.Second,
 		}, zerolog.Nop())
 		if err != nil {
 			t.Fatalf("expected no error creating repository, got %v", err)

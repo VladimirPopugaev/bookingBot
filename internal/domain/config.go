@@ -15,4 +15,5 @@ type TelegramConfig struct {
 type SiteConfig struct {
 	TargetURL      string `yaml:"target_url"`
 	RequestTimeout int `yaml:"request_timeout"` // in seconds
+	MonitoringInterval int `yaml:"monitoring_interval"` // in seconds
 }
