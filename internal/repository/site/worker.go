@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gocolly/colly"
@@ -13,7 +14,7 @@ import (
 )
 
 const (
-	defaultTimeout = 5 * time.Second
+	defaultTimeout            = 5 * time.Second
 	defaultMonitoringInterval = 60 * time.Second
 )
 
@@ -24,12 +25,17 @@ type worker struct {
 	cfg       *Config
 	collector *colly.Collector
 	log       zerolog.Logger
+
+	ctx    context.Context
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
 }
 
 type Config struct {
-	TargetURL string
-	Timeout   time.Duration
+	TargetURL          string
+	Timeout            time.Duration
 	MonitoringInterval time.Duration
+	disableMonitoring  bool // system parameter
 }
 
 func New(cfg *Config, logger zerolog.Logger) (domain.SiteWorkerRepository, error) {
@@ -45,20 +51,35 @@ func New(cfg *Config, logger zerolog.Logger) (domain.SiteWorkerRepository, error
 		return nil, fmt.Errorf("validate config: %w", err)
 	}
 
+	// setup collector
 	collector := colly.NewCollector()
+	collector.AllowURLRevisit = true
 	collector.SetRequestTimeout(cfg.Timeout)
+
+	ctx, cancel := context.WithCancel(context.Background())
 
 	log.Trace().Msg("Site worker repository initialized successfully")
 
-	return &worker{
-		cfg: &Config{
-			TargetURL: cfg.TargetURL,
-			Timeout:   cfg.Timeout,
-			MonitoringInterval: cfg.MonitoringInterval,
-		},
+	repo := &worker{
+		cfg:       cfg,
 		collector: collector,
 		log:       log,
-	}, nil
+		ctx:       ctx,
+		cancel:    cancel,
+	}
+
+	if !cfg.disableMonitoring {
+		// first monitoring check
+		err := repo.monitoringCheck(log)
+		if err != nil {
+			log.Error().Err(err).Msg("Initial site monitoring check failed")
+		}
+
+		repo.wg.Add(1)
+		go repo.backgroundMonitoring()
+	}
+
+	return repo, nil
 }
 
 func (c *Config) validate(log zerolog.Logger) error {
@@ -96,7 +117,6 @@ func (w *worker) FetchSiteStruct(ctx context.Context) (string, error) {
 	collector.OnResponse(func(r *colly.Response) {
 		html = string(r.Body)
 		log.Info().
-			Str("url", r.Request.URL.String()).
 			Int("status_code", r.StatusCode).
 			Int("content_length", len(r.Body)).
 			Msg("Fetched site html successfully")
@@ -130,7 +150,57 @@ func (w *worker) ParseSiteStruct(ctx context.Context, siteStruct string) (*domai
 	return nil, nil
 }
 
+func (w *worker) backgroundMonitoring() {
+	defer w.wg.Done()
+
+	log := w.log.With().
+		Str("method", "backgroundMonitoring").
+		Str("target_url", w.cfg.TargetURL).
+		Dur("monitoring_interval", w.cfg.MonitoringInterval).
+		Logger()
+
+	log.Trace().Msg("background monitoring started")
+
+	ticker := time.NewTicker(w.cfg.MonitoringInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-w.ctx.Done():
+			log.Trace().Msg("background monitoring stopped")
+			return
+		case <-ticker.C:
+			_ = w.monitoringCheck(log)
+		}
+	}
+}
+
+func (w *worker) monitoringCheck(log zerolog.Logger) error {
+	select {
+	case <-w.ctx.Done():
+		return domain.ErrContextCancelled
+	default:
+	}
+
+	ctx, cancel := context.WithTimeout(w.ctx, w.cfg.Timeout)
+	defer cancel()
+
+	html, err := w.FetchSiteStruct(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("Site monitoring fetch site struct failed")
+		return err
+	}
+
+	log.Info().
+		Int("content_length", len(html)).
+		Msg("Site monitoring iteration completed successfully")
+
+	return nil
+}
+
 func (w *worker) Close() error {
+	w.cancel()
+	w.wg.Wait()
 	w.log.Trace().Msg("Site worker repository closed")
 	return nil
 }
