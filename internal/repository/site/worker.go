@@ -67,7 +67,7 @@ func (c *Config) validate(log zerolog.Logger) error {
 	parsedURL, err := url.ParseRequestURI(c.TargetURL)
 	if err != nil || parsedURL.Scheme == "" || parsedURL.Host == "" {
 		log.Error().Err(err).Str("target_url", c.TargetURL).Msg("Site worker target url is invalid")
-		return domain.ErrUrlParse
+		return domain.ErrURLParse
 	}
 
 	if c.Timeout < 0 {

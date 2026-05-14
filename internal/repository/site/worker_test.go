@@ -74,7 +74,7 @@ func TestNew(t *testing.T) {
 				TargetURL: "://broken-url",
 				Timeout:   5 * time.Second,
 			},
-			wantErr: domain.ErrUrlParse,
+			wantErr: domain.ErrURLParse,
 		},
 	}
 
