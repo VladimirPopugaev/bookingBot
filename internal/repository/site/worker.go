@@ -1,4 +1,4 @@
-package siteworker
+package site
 
 import (
 	"booking_bot/internal/domain"
@@ -16,6 +16,7 @@ import (
 const (
 	defaultTimeout            = 5 * time.Second
 	defaultMonitoringInterval = 60 * time.Second
+	textPreviewLimit          = 200
 )
 
 // TODO: implement site worker that will check the site for availability
@@ -143,11 +144,6 @@ func (w *worker) FetchSiteStruct(ctx context.Context) (string, error) {
 	}
 
 	return html, nil
-}
-
-func (w *worker) ParseSiteStruct(ctx context.Context, siteStruct string) (*domain.SiteInfo, error) {
-	// TODO: implement site structure parsing logic
-	return nil, nil
 }
 
 func (w *worker) backgroundMonitoring() {

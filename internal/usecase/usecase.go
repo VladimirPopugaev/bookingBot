@@ -3,6 +3,7 @@ package usecase
 import (
 	"booking_bot/internal/domain"
 	"context"
+	"strings"
 
 	"github.com/rs/zerolog"
 )
@@ -29,6 +30,21 @@ func New(
 		cancelFunc:     cancel,
 	}
 
+	// TODO: remove
+	htmlContent, err := siteWorkerRepo.FetchSiteStruct(context.Background())
+	if err != nil {
+		log.Error().Err(err).Msg("Fetch site struct failed")
+		return nil, err
+	}
+
+	siteInfo, err := siteWorkerRepo.ParseSiteStruct(context.Background(), strings.NewReader(htmlContent))
+	if err != nil {
+		log.Error().Err(err).Msg("Parse site struct failed")
+		return nil, err
+	}
+	log.Info().Interface("siteInfo", siteInfo).Msg("Site info parsed successfully")
+
+	
 	return uc, nil
 }
 
