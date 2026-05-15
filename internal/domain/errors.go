@@ -9,4 +9,5 @@ var (
 
 	ErrURLParse      = errors.New("url parse failed")
 	ErrCollectStruct = errors.New("collect site structure failed")
+	ErrParseStruct = errors.New("parse site structure failed")
 )

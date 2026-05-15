@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -137,9 +138,9 @@ func TestNew(t *testing.T) {
 }
 
 func TestWorker_FetchSiteStruct(t *testing.T) {
-	// if runtime.GOOS == "windows" {
-	// 	t.Skip("skipping network integration test on Windows due to unstable colly/net-http interaction")
-	// }
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping network integration test on Windows due to unstable colly/net-http interaction on Go 1.26")
+	}
 
 	t.Run("success", func(t *testing.T) {
 		const expectedHTML = "<html><body>ok</body></html>"

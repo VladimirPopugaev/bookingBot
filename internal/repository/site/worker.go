@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gocolly/colly"
+	"github.com/gocolly/colly/v2"
 	"github.com/rs/zerolog"
 )
 
@@ -45,7 +45,6 @@ func New(cfg *Config, logger zerolog.Logger) (domain.SiteWorkerRepository, error
 		return nil, fmt.Errorf("validate config: %w", err)
 	}
 
-	// setup collector
 	collector := colly.NewCollector()
 	collector.AllowURLRevisit = true
 	collector.SetRequestTimeout(cfg.Timeout)
@@ -83,8 +82,10 @@ func (w *worker) FetchSiteStruct(ctx context.Context, fetchUrl string) (string, 
 	log := w.log.With().Str("method", "FetchSiteStruct").Str("target_url", fetchUrl).Logger()
 	collector := w.collector.Clone()
 
-	var html string
-	var visitErr error
+	var (
+		html     string
+		visitErr error
+	)
 
 	collector.OnResponse(func(r *colly.Response) {
 		html = string(r.Body)

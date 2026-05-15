@@ -3,7 +3,6 @@ package usecase
 import (
 	"booking_bot/internal/domain"
 	"context"
-	"fmt"
 	"net/url"
 	"strings"
 )
@@ -23,10 +22,17 @@ func (uc *Usecase) AnalyzeSite(ctx context.Context, rawURL string) (*domain.Site
 		return nil, domain.ErrURLParse
 	}
 
-	return &domain.SiteInfo{
-		Title:       "Mock Title",
-		H1:          "Mock H1",
-		LinksCount:  3,
-		TextPreview: fmt.Sprintf("Mock preview for %s", trimmedURL),
-	}, nil
+	htmlStruct, err := uc.siteWorkerRepo.FetchSiteStruct(ctx, parsedURL.String())
+	if err != nil {
+		log.Error().Err(err).Str("url", trimmedURL).Msg("Failed to fetch site structure")
+		return nil, domain.ErrCollectStruct
+	}
+
+	siteInfo, err := uc.siteWorkerRepo.ParseSiteStruct(ctx, strings.NewReader(htmlStruct))
+	if err != nil {
+		log.Error().Err(err).Str("url", trimmedURL).Msg("Failed to parse site structure")
+		return nil, domain.ErrParseStruct
+	}
+
+	return siteInfo, nil
 }
