@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/rs/zerolog"
@@ -37,12 +39,18 @@ var serveCmd = &cobra.Command{
 		log = log.Level(level)
 		log.Trace().Msg("Logger initialized")
 
-		application, err := app.New(cfg, log)
+		if err := ValidateConfig(cfg, port); err != nil {
+			log.Error().Err(err).Int("port", port).Msg("Invalid runtime config")
+			os.Exit(1)
+		}
+
+		application, err := app.New(cfg, port, log)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to initialize application")
 			os.Exit(1)
 		}
 
+		application.Start(cfg.HTTP)
 		log.Info().Msg("Success initialization")
 
 		chExit := make(chan os.Signal, 1)
@@ -65,8 +73,30 @@ func init() {
 	rootCmd.AddCommand(serveCmd)
 }
 
-func ValidateConfig(cfg *domain.Config) error {
-	// TODO: remove validataion from domain and move it here, add more checks if needed. Normalisation should be here too, not in domain.
+func ValidateConfig(cfg *domain.Config, port int) error {
+	if cfg == nil {
+		return fmt.Errorf("config is nil")
+	}
+
+	if port <= 0 {
+		return fmt.Errorf("invalid port: must be greater than zero")
+	}
+
+	if strings.TrimSpace(cfg.HTTP.Host) == "" {
+		cfg.HTTP.Host = "0.0.0.0"
+	}
+
+	if !cfg.HTTP.TLSEnabled {
+		return nil
+	}
+
+	if strings.TrimSpace(cfg.HTTP.CertFile) == "" {
+		return fmt.Errorf("http cert_file is required when tls_enabled=true")
+	}
+
+	if strings.TrimSpace(cfg.HTTP.KeyFile) == "" {
+		return fmt.Errorf("http key_file is required when tls_enabled=true")
+	}
 
 	return nil
 }

@@ -4,8 +4,6 @@ import (
 	"booking_bot/internal/domain"
 	"context"
 	"fmt"
-	"net/url"
-	"strings"
 	"sync"
 	"time"
 
@@ -19,9 +17,6 @@ const (
 	textPreviewLimit          = 200
 )
 
-// TODO: implement site worker that will check the site for availability
-// TODO: implement site worker that will parse the site structure and parse info about it in SiteInfo struct
-
 type worker struct {
 	cfg       *Config
 	collector *colly.Collector
@@ -33,10 +28,8 @@ type worker struct {
 }
 
 type Config struct {
-	TargetURL          string
 	Timeout            time.Duration
 	MonitoringInterval time.Duration
-	disableMonitoring  bool // system parameter
 }
 
 func New(cfg *Config, logger zerolog.Logger) (domain.SiteWorkerRepository, error) {
@@ -69,32 +62,10 @@ func New(cfg *Config, logger zerolog.Logger) (domain.SiteWorkerRepository, error
 		cancel:    cancel,
 	}
 
-	if !cfg.disableMonitoring {
-		// first monitoring check
-		err := repo.monitoringCheck(log)
-		if err != nil {
-			log.Error().Err(err).Msg("Initial site monitoring check failed")
-		}
-
-		repo.wg.Add(1)
-		go repo.backgroundMonitoring()
-	}
-
 	return repo, nil
 }
 
 func (c *Config) validate(log zerolog.Logger) error {
-	if strings.TrimSpace(c.TargetURL) == "" {
-		log.Error().Msg("Site worker target url is empty")
-		return domain.ErrEmptyParameter
-	}
-
-	parsedURL, err := url.ParseRequestURI(c.TargetURL)
-	if err != nil || parsedURL.Scheme == "" || parsedURL.Host == "" {
-		log.Error().Err(err).Str("target_url", c.TargetURL).Msg("Site worker target url is invalid")
-		return domain.ErrURLParse
-	}
-
 	if c.Timeout <= 0 {
 		log.Warn().Dur("timeout", c.Timeout).Msg("Site worker timeout is negative. Using default timeout (5 seconds)")
 		c.Timeout = defaultTimeout
@@ -108,8 +79,8 @@ func (c *Config) validate(log zerolog.Logger) error {
 	return nil
 }
 
-func (w *worker) FetchSiteStruct(ctx context.Context) (string, error) {
-	log := w.log.With().Str("method", "FetchSiteStruct").Str("target_url", w.cfg.TargetURL).Logger()
+func (w *worker) FetchSiteStruct(ctx context.Context, fetchUrl string) (string, error) {
+	log := w.log.With().Str("method", "FetchSiteStruct").Str("target_url", fetchUrl).Logger()
 	collector := w.collector.Clone()
 
 	var html string
@@ -133,7 +104,7 @@ func (w *worker) FetchSiteStruct(ctx context.Context) (string, error) {
 		logEvent.Msg("Fetch site html failed")
 	})
 
-	if err := collector.Visit(w.cfg.TargetURL); err != nil {
+	if err := collector.Visit(fetchUrl); err != nil {
 		log.Error().Err(err).Msg("Visit site html failed")
 		return "", domain.ErrCollectStruct
 	}
@@ -151,7 +122,6 @@ func (w *worker) backgroundMonitoring() {
 
 	log := w.log.With().
 		Str("method", "backgroundMonitoring").
-		Str("target_url", w.cfg.TargetURL).
 		Dur("monitoring_interval", w.cfg.MonitoringInterval).
 		Logger()
 
@@ -172,16 +142,11 @@ func (w *worker) backgroundMonitoring() {
 }
 
 func (w *worker) monitoringCheck(log zerolog.Logger) error {
-	select {
-	case <-w.ctx.Done():
-		return domain.ErrContextCancelled
-	default:
-	}
-
 	ctx, cancel := context.WithTimeout(w.ctx, w.cfg.Timeout)
 	defer cancel()
 
-	html, err := w.FetchSiteStruct(ctx)
+	// TODO: delete monitoring and add monitorring to supervisor
+	html, err := w.FetchSiteStruct(ctx, "")
 	if err != nil {
 		log.Error().Err(err).Msg("Site monitoring fetch site struct failed")
 		return err

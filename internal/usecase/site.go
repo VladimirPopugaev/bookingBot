@@ -1,0 +1,32 @@
+package usecase
+
+import (
+	"booking_bot/internal/domain"
+	"context"
+	"fmt"
+	"net/url"
+	"strings"
+)
+
+func (uc *Usecase) AnalyzeSite(ctx context.Context, rawURL string) (*domain.SiteInfo, error) {
+	log := uc.log.With().Str("method", "AnalyzeSite").Str("url", rawURL).Logger()
+
+	trimmedURL := strings.TrimSpace(rawURL)
+	if trimmedURL == "" {
+		log.Error().Msg("Analyze site url is empty")
+		return nil, domain.ErrEmptyParameter
+	}
+
+	parsedURL, err := url.ParseRequestURI(trimmedURL)
+	if err != nil || parsedURL.Scheme == "" || parsedURL.Host == "" {
+		log.Error().Err(err).Str("url", trimmedURL).Msg("Analyze site url is invalid")
+		return nil, domain.ErrURLParse
+	}
+
+	return &domain.SiteInfo{
+		Title:       "Mock Title",
+		H1:          "Mock H1",
+		LinksCount:  3,
+		TextPreview: fmt.Sprintf("Mock preview for %s", trimmedURL),
+	}, nil
+}

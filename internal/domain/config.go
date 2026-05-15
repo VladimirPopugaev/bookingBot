@@ -1,9 +1,10 @@
 package domain
 
 type Config struct {
-	LogLevel string         `yaml:"logLevel"`
-	Telegram TelegramConfig `yaml:"telegram"`
-	SiteConfig SiteConfig       `yaml:"site"`
+	LogLevel   string         `yaml:"logLevel"`
+	Telegram   TelegramConfig `yaml:"telegram"`
+	SiteConfig SiteConfig     `yaml:"site"`
+	HTTP       HTTPConfig     `yaml:"http"`
 }
 
 type TelegramConfig struct {
@@ -13,7 +14,13 @@ type TelegramConfig struct {
 }
 
 type SiteConfig struct {
-	TargetURL      string `yaml:"target_url"`
-	RequestTimeout int `yaml:"request_timeout"` // in seconds
-	MonitoringInterval int `yaml:"monitoring_interval"` // in seconds
+	RequestTimeout     int    `yaml:"request_timeout"`     // in seconds
+	MonitoringInterval int    `yaml:"monitoring_interval"` // in seconds
+}
+
+type HTTPConfig struct {
+	Host       string `yaml:"host"`
+	TLSEnabled bool   `yaml:"tls_enabled"`
+	CertFile   string `yaml:"cert_file"`
+	KeyFile    string `yaml:"key_file"`
 }
