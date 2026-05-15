@@ -3,6 +3,9 @@ package domain
 import (
 	"context"
 	"io"
+
+	"github.com/Masterminds/squirrel"
+	"github.com/jackc/pgx/v5"
 )
 
 type Usecase interface {
@@ -20,4 +23,14 @@ type SiteWorkerRepository interface {
 	FetchSiteStruct(ctx context.Context, fetchUrl string) (string, error)
 	ParseSiteStruct(ctx context.Context, htmlReader io.Reader) (*SiteInfo, error)
 	Close() error
+}
+
+type DatabaseRepository interface {
+	QueryExecutor
+
+	BeginTx(ctx context.Context, opts pgx.TxOptions) (Tx, error)
+	WithTx(ctx context.Context, fn func(context.Context, Tx) error) error
+	Builder() squirrel.StatementBuilderType
+	Ping(ctx context.Context) error
+	Close()
 }

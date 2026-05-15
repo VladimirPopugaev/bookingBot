@@ -10,13 +10,14 @@ import (
 
 	httpdelivery "booking_bot/internal/delivery/http"
 	"booking_bot/internal/domain"
+	"booking_bot/internal/repository/postgres"
 	siteWorkerRepository "booking_bot/internal/repository/site"
 	telegramRepository "booking_bot/internal/repository/telegram"
 	"booking_bot/internal/usecase"
 )
 
 type App struct {
-	log     zerolog.Logger
+	log        zerolog.Logger
 	uc         domain.Usecase
 	httpServer *http.Server
 }
@@ -51,7 +52,16 @@ func New(cfg *domain.Config, port int, log zerolog.Logger) (*App, error) {
 	}
 	log.Trace().Msg("Site worker repository created successfully")
 
-	uc, err := usecase.New(telegramRepo, siteWorkerRepo, log)
+	// TODO: добавлять его в sql-репозитории как QueryExecutor
+	databaseRepo, err := postgres.New(cfg.Database, log)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create postgres repository")
+		return nil, fmt.Errorf("create postgres repository: %w", err)
+	}
+	
+	log.Trace().Msg("Postgres repository created successfully")
+
+	uc, err := usecase.New(telegramRepo, siteWorkerRepo, databaseRepo, log)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to create usecase")
 		return nil, fmt.Errorf("create usecase: %w", err)
@@ -62,7 +72,7 @@ func New(cfg *domain.Config, port int, log zerolog.Logger) (*App, error) {
 	server := httpdelivery.NewServer(addr, router)
 
 	return &App{
-		log:     log,
+		log:        log,
 		uc:         uc,
 		httpServer: server,
 	}, nil

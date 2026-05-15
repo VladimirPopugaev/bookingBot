@@ -145,7 +145,7 @@ func TestUsecase_AnalyzeSite(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			uc, err := New(nil, tt.repo, zerolog.Nop())
+			uc, err := New(nil, tt.repo, nil, zerolog.Nop())
 			if err != nil {
 				t.Fatalf("expected no error creating usecase, got %v", err)
 			}

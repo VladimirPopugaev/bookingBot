@@ -10,6 +10,7 @@ import (
 type Usecase struct {
 	telegramRepo   domain.TelegramRepository
 	siteWorkerRepo domain.SiteWorkerRepository
+	databaseRepo   domain.DatabaseRepository
 	log            zerolog.Logger
 
 	cancelFunc context.CancelFunc
@@ -18,6 +19,7 @@ type Usecase struct {
 func New(
 	telegramRepo domain.TelegramRepository,
 	siteWorkerRepo domain.SiteWorkerRepository,
+	databaseRepo domain.DatabaseRepository,
 	log zerolog.Logger,
 ) (*Usecase, error) {
 	_, cancel := context.WithCancel(context.Background())
@@ -25,6 +27,7 @@ func New(
 	uc := &Usecase{
 		telegramRepo:   telegramRepo,
 		siteWorkerRepo: siteWorkerRepo,
+		databaseRepo:   databaseRepo,
 		log:            log,
 		cancelFunc:     cancel,
 	}
@@ -38,6 +41,7 @@ func (uc *Usecase) Close() {
 
 	uc.telegramRepo.Close()
 	uc.siteWorkerRepo.Close()
+	uc.databaseRepo.Close()
 
 	uc.log.Trace().Msg("Usecase closed successfully")
 }
