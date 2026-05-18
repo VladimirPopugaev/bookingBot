@@ -12,6 +12,7 @@ import (
 	"booking_bot/internal/domain"
 	"booking_bot/internal/repository/postgres"
 	siteWorkerRepository "booking_bot/internal/repository/site"
+	siteParserRepository "booking_bot/internal/repository/site/parser"
 	telegramRepository "booking_bot/internal/repository/telegram"
 	"booking_bot/internal/usecase"
 )
@@ -52,16 +53,22 @@ func New(cfg *domain.Config, port int, log zerolog.Logger) (*App, error) {
 	}
 	log.Trace().Msg("Site worker repository created successfully")
 
+	siteParserRepo, err := siteParserRepository.New(log)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create site parser repository")
+		return nil, fmt.Errorf("create site parser repository: %w", err)
+	}
+	log.Trace().Msg("Site parser repository created successfully")
+
 	// TODO: добавлять его в sql-репозитории как QueryExecutor
 	databaseRepo, err := postgres.New(cfg.Database, log)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to create postgres repository")
 		return nil, fmt.Errorf("create postgres repository: %w", err)
 	}
-	
 	log.Trace().Msg("Postgres repository created successfully")
 
-	uc, err := usecase.New(telegramRepo, siteWorkerRepo, databaseRepo, log)
+	uc, err := usecase.New(telegramRepo, siteWorkerRepo, siteParserRepo, databaseRepo, log)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to create usecase")
 		return nil, fmt.Errorf("create usecase: %w", err)

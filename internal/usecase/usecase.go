@@ -10,6 +10,7 @@ import (
 type Usecase struct {
 	telegramRepo   domain.TelegramRepository
 	siteWorkerRepo domain.SiteWorkerRepository
+	siteParserRepo domain.SiteParserRepository
 	databaseRepo   domain.DatabaseRepository
 	log            zerolog.Logger
 
@@ -19,6 +20,7 @@ type Usecase struct {
 func New(
 	telegramRepo domain.TelegramRepository,
 	siteWorkerRepo domain.SiteWorkerRepository,
+	siteParserRepo domain.SiteParserRepository,
 	databaseRepo domain.DatabaseRepository,
 	log zerolog.Logger,
 ) (*Usecase, error) {
@@ -27,6 +29,7 @@ func New(
 	uc := &Usecase{
 		telegramRepo:   telegramRepo,
 		siteWorkerRepo: siteWorkerRepo,
+		siteParserRepo: siteParserRepo,
 		databaseRepo:   databaseRepo,
 		log:            log,
 		cancelFunc:     cancel,
@@ -41,6 +44,7 @@ func (uc *Usecase) Close() {
 
 	uc.telegramRepo.Close()
 	uc.siteWorkerRepo.Close()
+	uc.siteParserRepo.Close()
 	uc.databaseRepo.Close()
 
 	uc.log.Trace().Msg("Usecase closed successfully")

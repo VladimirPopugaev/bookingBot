@@ -13,12 +13,9 @@ import (
 
 type stubSiteWorkerRepository struct {
 	fetchFn func(ctx context.Context, fetchURL string) (string, error)
-	parseFn func(ctx context.Context, htmlReader io.Reader) (*domain.SiteInfo, error)
 
-	fetchCalls     int
-	parseCalls     int
-	lastFetchURL   string
-	lastParsedHTML string
+	fetchCalls   int
+	lastFetchURL string
 }
 
 func (s *stubSiteWorkerRepository) FetchSiteStruct(ctx context.Context, fetchURL string) (string, error) {
@@ -32,7 +29,18 @@ func (s *stubSiteWorkerRepository) FetchSiteStruct(ctx context.Context, fetchURL
 	return s.fetchFn(ctx, fetchURL)
 }
 
-func (s *stubSiteWorkerRepository) ParseSiteStruct(ctx context.Context, htmlReader io.Reader) (*domain.SiteInfo, error) {
+func (s *stubSiteWorkerRepository) Close() error {
+	return nil
+}
+
+type stubSiteParserRepository struct {
+	parseFn func(ctx context.Context, htmlReader io.Reader) (*domain.SiteInfo, error)
+
+	parseCalls     int
+	lastParsedHTML string
+}
+
+func (s *stubSiteParserRepository) ParseSiteStruct(ctx context.Context, htmlReader io.Reader) (*domain.SiteInfo, error) {
 	s.parseCalls++
 
 	body, err := io.ReadAll(htmlReader)
@@ -48,7 +56,7 @@ func (s *stubSiteWorkerRepository) ParseSiteStruct(ctx context.Context, htmlRead
 	return s.parseFn(ctx, strings.NewReader(s.lastParsedHTML))
 }
 
-func (s *stubSiteWorkerRepository) Close() error {
+func (s *stubSiteParserRepository) Close() error {
 	return nil
 }
 
@@ -58,7 +66,8 @@ func TestUsecase_AnalyzeSite(t *testing.T) {
 	tests := []struct {
 		name           string
 		rawURL         string
-		repo           *stubSiteWorkerRepository
+		workerRepo     *stubSiteWorkerRepository
+		parserRepo     *stubSiteParserRepository
 		wantErr        error
 		wantInfo       *domain.SiteInfo
 		wantFetchCalls int
@@ -69,7 +78,8 @@ func TestUsecase_AnalyzeSite(t *testing.T) {
 		{
 			name:           "empty url",
 			rawURL:         "   ",
-			repo:           &stubSiteWorkerRepository{},
+			workerRepo:     &stubSiteWorkerRepository{},
+			parserRepo:     &stubSiteParserRepository{},
 			wantErr:        domain.ErrEmptyParameter,
 			wantFetchCalls: 0,
 			wantParseCalls: 0,
@@ -77,7 +87,8 @@ func TestUsecase_AnalyzeSite(t *testing.T) {
 		{
 			name:           "invalid url",
 			rawURL:         "not-a-url",
-			repo:           &stubSiteWorkerRepository{},
+			workerRepo:     &stubSiteWorkerRepository{},
+			parserRepo:     &stubSiteParserRepository{},
 			wantErr:        domain.ErrURLParse,
 			wantFetchCalls: 0,
 			wantParseCalls: 0,
@@ -85,11 +96,12 @@ func TestUsecase_AnalyzeSite(t *testing.T) {
 		{
 			name:   "fetch site structure failed",
 			rawURL: "https://example.com/path?q=1",
-			repo: &stubSiteWorkerRepository{
+			workerRepo: &stubSiteWorkerRepository{
 				fetchFn: func(ctx context.Context, fetchURL string) (string, error) {
 					return "", errors.New("upstream fetch failed")
 				},
 			},
+			parserRepo:     &stubSiteParserRepository{},
 			wantErr:        domain.ErrCollectStruct,
 			wantFetchCalls: 1,
 			wantParseCalls: 0,
@@ -98,10 +110,12 @@ func TestUsecase_AnalyzeSite(t *testing.T) {
 		{
 			name:   "parse site structure failed",
 			rawURL: " https://example.com/path?q=1 ",
-			repo: &stubSiteWorkerRepository{
+			workerRepo: &stubSiteWorkerRepository{
 				fetchFn: func(ctx context.Context, fetchURL string) (string, error) {
 					return "<html><body>payload</body></html>", nil
 				},
+			},
+			parserRepo: &stubSiteParserRepository{
 				parseFn: func(ctx context.Context, htmlReader io.Reader) (*domain.SiteInfo, error) {
 					return nil, errors.New("parse failed")
 				},
@@ -115,10 +129,12 @@ func TestUsecase_AnalyzeSite(t *testing.T) {
 		{
 			name:   "success",
 			rawURL: " https://example.com/path?q=1 ",
-			repo: &stubSiteWorkerRepository{
+			workerRepo: &stubSiteWorkerRepository{
 				fetchFn: func(ctx context.Context, fetchURL string) (string, error) {
 					return "<html><body>payload</body></html>", nil
 				},
+			},
+			parserRepo: &stubSiteParserRepository{
 				parseFn: func(ctx context.Context, htmlReader io.Reader) (*domain.SiteInfo, error) {
 					return &domain.SiteInfo{
 						Title:       "Example",
@@ -145,7 +161,7 @@ func TestUsecase_AnalyzeSite(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			uc, err := New(nil, tt.repo, nil, zerolog.Nop())
+			uc, err := New(nil, tt.workerRepo, tt.parserRepo, nil, zerolog.Nop())
 			if err != nil {
 				t.Fatalf("expected no error creating usecase, got %v", err)
 			}
@@ -169,20 +185,20 @@ func TestUsecase_AnalyzeSite(t *testing.T) {
 				}
 			}
 
-			if tt.repo.fetchCalls != tt.wantFetchCalls {
-				t.Fatalf("expected fetch calls %d, got %d", tt.wantFetchCalls, tt.repo.fetchCalls)
+			if tt.workerRepo.fetchCalls != tt.wantFetchCalls {
+				t.Fatalf("expected fetch calls %d, got %d", tt.wantFetchCalls, tt.workerRepo.fetchCalls)
 			}
 
-			if tt.repo.parseCalls != tt.wantParseCalls {
-				t.Fatalf("expected parse calls %d, got %d", tt.wantParseCalls, tt.repo.parseCalls)
+			if tt.parserRepo.parseCalls != tt.wantParseCalls {
+				t.Fatalf("expected parse calls %d, got %d", tt.wantParseCalls, tt.parserRepo.parseCalls)
 			}
 
-			if tt.repo.lastFetchURL != tt.wantFetchURL {
-				t.Fatalf("expected fetch URL %q, got %q", tt.wantFetchURL, tt.repo.lastFetchURL)
+			if tt.workerRepo.lastFetchURL != tt.wantFetchURL {
+				t.Fatalf("expected fetch URL %q, got %q", tt.wantFetchURL, tt.workerRepo.lastFetchURL)
 			}
 
-			if tt.repo.lastParsedHTML != tt.wantParsedHTML {
-				t.Fatalf("expected parsed HTML %q, got %q", tt.wantParsedHTML, tt.repo.lastParsedHTML)
+			if tt.parserRepo.lastParsedHTML != tt.wantParsedHTML {
+				t.Fatalf("expected parsed HTML %q, got %q", tt.wantParsedHTML, tt.parserRepo.lastParsedHTML)
 			}
 		})
 	}

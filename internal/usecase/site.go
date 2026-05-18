@@ -28,7 +28,7 @@ func (uc *Usecase) AnalyzeSite(ctx context.Context, rawURL string) (*domain.Site
 		return nil, domain.ErrCollectStruct
 	}
 
-	siteInfo, err := uc.siteWorkerRepo.ParseSiteStruct(ctx, strings.NewReader(htmlStruct))
+	siteInfo, err := uc.siteParserRepo.ParseSiteStruct(ctx, strings.NewReader(htmlStruct))
 	if err != nil {
 		log.Error().Err(err).Str("url", trimmedURL).Msg("Failed to parse site structure")
 		return nil, domain.ErrParseStruct

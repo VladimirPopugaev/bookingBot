@@ -21,6 +21,10 @@ type TelegramRepository interface {
 type SiteWorkerRepository interface {
 	// FetchSiteStruct will fetch the site structure and return it as a string (for now, it can be HTML or JSON)
 	FetchSiteStruct(ctx context.Context, fetchUrl string) (string, error)
+	Close() error
+}
+
+type SiteParserRepository interface {
 	ParseSiteStruct(ctx context.Context, htmlReader io.Reader) (*SiteInfo, error)
 	Close() error
 }

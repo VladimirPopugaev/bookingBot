@@ -1,0 +1,146 @@
+package parser
+
+import (
+	"booking_bot/internal/domain"
+	"context"
+	"errors"
+	"strings"
+	"testing"
+
+	"github.com/rs/zerolog"
+)
+
+func TestRepository_ParseSiteStruct(t *testing.T) {
+	t.Parallel()
+
+	newParser := func(t *testing.T) *repository {
+		t.Helper()
+
+		repo, err := New(zerolog.Nop())
+		if err != nil {
+			t.Fatalf("expected no error creating repository, got %v", err)
+		}
+
+		t.Cleanup(func() {
+			_ = repo.Close()
+		})
+
+		parserRepo, ok := repo.(*repository)
+		if !ok {
+			t.Fatalf("expected repository type *repository, got %T", repo)
+		}
+
+		return parserRepo
+	}
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		html := `
+<!doctype html>
+<html>
+	<head>
+		<title> Booking   Page </title>
+		<style>.hidden { display:none; }</style>
+	</head>
+	<body>
+		<h1>Main Booking</h1>
+		<p>Find the best option for your stay.</p>
+		<a href="/one">One</a>
+		<div>
+			<a href="/two">Two</a>
+		</div>
+		<script>window.__SECRET__ = "skip me"</script>
+	</body>
+</html>`
+
+		info, err := newParser(t).ParseSiteStruct(context.Background(), strings.NewReader(html))
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		if info.Title != "Booking Page" {
+			t.Fatalf("expected title %q, got %q", "Booking Page", info.Title)
+		}
+
+		if info.H1 != "Main Booking" {
+			t.Fatalf("expected h1 %q, got %q", "Main Booking", info.H1)
+		}
+
+		if info.LinksCount != 2 {
+			t.Fatalf("expected links count %d, got %d", 2, info.LinksCount)
+		}
+
+		const expectedPreview = "Booking Page Main Booking Find the best option for your stay. One Two"
+		if info.TextPreview != expectedPreview {
+			t.Fatalf("expected preview %q, got %q", expectedPreview, info.TextPreview)
+		}
+	})
+
+	t.Run("empty html", func(t *testing.T) {
+		t.Parallel()
+
+		info, err := newParser(t).ParseSiteStruct(context.Background(), strings.NewReader(""))
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		if info == nil {
+			t.Fatal("expected site info, got nil")
+		}
+
+		if *info != (domain.SiteInfo{}) {
+			t.Fatalf("expected empty site info, got %+v", *info)
+		}
+	})
+
+	t.Run("context cancelled", func(t *testing.T) {
+		t.Parallel()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		info, err := newParser(t).ParseSiteStruct(ctx, strings.NewReader("<html><body>test</body></html>"))
+		if !errors.Is(err, domain.ErrContextCancelled) {
+			t.Fatalf("expected error %v, got %v", domain.ErrContextCancelled, err)
+		}
+
+		if info != nil {
+			t.Fatalf("expected nil site info, got %+v", *info)
+		}
+	})
+
+	t.Run("ignores service tags and limits preview", func(t *testing.T) {
+		t.Parallel()
+
+		longText := strings.Repeat("word ", 120)
+		html := "<html><head><title>Big Page</title><noscript>hidden text</noscript></head><body>" +
+			"<h1>Header</h1>" +
+			"<script>script text should be ignored</script>" +
+			"<style>.x{content:'ignored';}</style>" +
+			"<p>" + longText + "</p>" +
+			"<a href='/1'/>" +
+			"</body></html>"
+
+		info, err := newParser(t).ParseSiteStruct(context.Background(), strings.NewReader(html))
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		if info.LinksCount != 1 {
+			t.Fatalf("expected links count %d, got %d", 1, info.LinksCount)
+		}
+
+		if strings.Contains(info.TextPreview, "ignored") || strings.Contains(info.TextPreview, "hidden text") {
+			t.Fatalf("expected preview to skip service tags, got %q", info.TextPreview)
+		}
+
+		if len([]rune(info.TextPreview)) != defaultTextPreviewLength {
+			t.Fatalf("expected preview length %d, got %d", defaultTextPreviewLength, len([]rune(info.TextPreview)))
+		}
+
+		if !strings.HasPrefix(info.TextPreview, "Big Page Header word word") {
+			t.Fatalf("unexpected preview prefix: %q", info.TextPreview)
+		}
+	})
+}

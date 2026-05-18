@@ -1,4 +1,4 @@
-package site
+package parser
 
 import (
 	"booking_bot/internal/domain"
@@ -7,11 +7,28 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/rs/zerolog"
 	"golang.org/x/net/html"
 )
 
-func (w *worker) ParseSiteStruct(ctx context.Context, htmlReader io.Reader) (*domain.SiteInfo, error) {
-	log := w.log.With().Str("method", "ParseSiteStruct").Logger()
+var (
+	defaultTextPreviewLength = 200
+)
+
+type repository struct {
+	log zerolog.Logger
+}
+
+func New(logger zerolog.Logger) (domain.SiteParserRepository, error) {
+	log := logger.With().Str("repository", "site_parser").Logger()
+
+	return &repository{
+		log: log,
+	}, nil
+}
+
+func (r *repository) ParseSiteStruct(ctx context.Context, htmlReader io.Reader) (*domain.SiteInfo, error) {
+	log := r.log.With().Str("method", "ParseSiteStruct").Logger()
 
 	tokenizer := html.NewTokenizer(htmlReader)
 	info := &domain.SiteInfo{}
@@ -23,7 +40,7 @@ func (w *worker) ParseSiteStruct(ctx context.Context, htmlReader io.Reader) (*do
 	)
 
 	previewBuilder := strings.Builder{}
-	previewBuilder.Grow(textPreviewLimit)
+	previewBuilder.Grow(defaultTextPreviewLength)
 
 	for {
 		select {
@@ -102,7 +119,7 @@ func (w *worker) ParseSiteStruct(ctx context.Context, htmlReader io.Reader) (*do
 				info.H1 = appendSentencePart(info.H1, text)
 			}
 
-			appendPreviewText(&previewBuilder, text, textPreviewLimit)
+			appendPreviewText(&previewBuilder, text, defaultTextPreviewLength)
 		}
 	}
 }
@@ -161,4 +178,9 @@ func truncateRunes(text string, limit int) string {
 	}
 
 	return string(runes[:limit])
+}
+
+func (r *repository) Close() error {
+	r.log.Trace().Msg("Site parser repository closed")
+	return nil
 }
