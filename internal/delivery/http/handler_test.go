@@ -12,11 +12,20 @@ import (
 )
 
 type stubUsecase struct {
-	analyzeFunc func(ctx context.Context, rawURL string) (*domain.SiteInfo, error)
+	analyzeFunc               func(ctx context.Context, rawURL string) (*domain.SiteInfo, error)
+	checkSiteAvailabilityFunc func(ctx context.Context, rawURL string) (bool, error)
 }
 
 func (s stubUsecase) AnalyzeSite(ctx context.Context, rawURL string) (*domain.SiteInfo, error) {
 	return s.analyzeFunc(ctx, rawURL)
+}
+
+func (s stubUsecase) CheckSiteAvailability(ctx context.Context, rawURL string) (bool, error) {
+	if s.checkSiteAvailabilityFunc == nil {
+		return false, nil
+	}
+
+	return s.checkSiteAvailabilityFunc(ctx, rawURL)
 }
 
 func (s stubUsecase) Close() {}

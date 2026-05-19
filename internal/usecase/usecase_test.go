@@ -56,6 +56,10 @@ func (s *stubSiteParserRepository) ParseSiteStruct(ctx context.Context, htmlRead
 	return s.parseFn(ctx, strings.NewReader(s.lastParsedHTML))
 }
 
+func (s *stubSiteParserRepository) IsAvailableToRegister(ctx context.Context, text string) (bool, error) {
+	return false, nil
+}
+
 func (s *stubSiteParserRepository) Close() error {
 	return nil
 }

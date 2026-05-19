@@ -13,6 +13,35 @@ import (
 
 var (
 	defaultTextPreviewLength = 200
+
+	unavailableRegistrationPhrases = []string{
+		"регистрация закрыта",
+		"регистрация окончена",
+		"регистрация завершена",
+		"продажа завершена",
+		"продажа билетов завершена",
+		"билеты закончились",
+		"нет билетов",
+		"мест нет",
+		"sold out",
+		"registration closed",
+		"registration ended",
+		"tickets unavailable",
+	}
+
+	availableRegistrationPhrases = []string{
+		"зарегистрироваться",
+		"регистрация открыта",
+		"купить билет",
+		"купить билеты",
+		"забронировать",
+		"принять участие",
+		"register",
+		"registration is open",
+		"buy ticket",
+		"buy tickets",
+		"book now",
+	}
 )
 
 type repository struct {
@@ -122,6 +151,89 @@ func (r *repository) ParseSiteStruct(ctx context.Context, htmlReader io.Reader) 
 			appendPreviewText(&previewBuilder, text, defaultTextPreviewLength)
 		}
 	}
+}
+
+func (r *repository) IsAvailableToRegister(ctx context.Context, text string) (bool, error) {
+	log := r.log.With().Str("method", "IsAvailableToRegister").Logger()
+
+	visibleText, err := extractVisibleText(ctx, strings.NewReader(text), log)
+	if err != nil {
+		log.Error().Err(err).Msg("Extract visible text failed")
+		return false, err
+	}
+
+	normalizedText := strings.ToLower(visibleText)
+	if containsAnyPhrase(normalizedText, unavailableRegistrationPhrases) {
+		return false, nil
+	}
+
+	return containsAnyPhrase(normalizedText, availableRegistrationPhrases), nil
+}
+
+func extractVisibleText(ctx context.Context, htmlReader io.Reader, log zerolog.Logger) (string, error) {
+	tokenizer := html.NewTokenizer(htmlReader)
+	builder := strings.Builder{}
+
+	var depthLevel int
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Error().Err(ctx.Err()).Msg("Extract visible text cancelled")
+			return "", domain.ErrContextCancelled
+		default:
+		}
+
+		switch tokenizer.Next() {
+		case html.ErrorToken:
+			err := tokenizer.Err()
+			if err != nil && err != io.EOF {
+				log.Error().Err(err).Msg("Extract visible text failed")
+				return "", err
+			}
+
+			return strings.TrimSpace(builder.String()), nil
+
+		case html.StartTagToken:
+			switch tokenizer.Token().DataAtom.String() {
+			case "script", "style", "noscript":
+				depthLevel++
+			}
+
+		case html.EndTagToken:
+			switch tokenizer.Token().DataAtom.String() {
+			case "script", "style", "noscript":
+				if depthLevel > 0 {
+					depthLevel--
+				}
+			}
+
+		case html.TextToken:
+			if depthLevel > 0 {
+				continue
+			}
+
+			text := normalizeHTMLText(string(tokenizer.Text()))
+			if text == "" {
+				continue
+			}
+
+			if builder.Len() > 0 {
+				builder.WriteByte(' ')
+			}
+			builder.WriteString(text)
+		}
+	}
+}
+
+func containsAnyPhrase(text string, phrases []string) bool {
+	for _, phrase := range phrases {
+		if strings.Contains(text, phrase) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func normalizeHTMLText(text string) string {

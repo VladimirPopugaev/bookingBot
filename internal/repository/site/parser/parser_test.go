@@ -144,3 +144,101 @@ func TestRepository_ParseSiteStruct(t *testing.T) {
 		}
 	})
 }
+
+func TestRepository_IsAvailableToRegister(t *testing.T) {
+	t.Parallel()
+
+	newParser := func(t *testing.T) *repository {
+		t.Helper()
+
+		repo, err := New(zerolog.Nop())
+		if err != nil {
+			t.Fatalf("expected no error creating repository, got %v", err)
+		}
+
+		t.Cleanup(func() {
+			_ = repo.Close()
+		})
+
+		parserRepo, ok := repo.(*repository)
+		if !ok {
+			t.Fatalf("expected repository type *repository, got %T", repo)
+		}
+
+		return parserRepo
+	}
+
+	tests := []struct {
+		name      string
+		text      string
+		ctx       func() context.Context
+		want      bool
+		wantError error
+	}{
+		{
+			name: "html with registration button is available",
+			text: `<html><body><button>Зарегистрироваться</button></body></html>`,
+			want: true,
+		},
+		{
+			name: "html with buy ticket text is available",
+			text: `<html><body><a href="/tickets">Купить билет</a></body></html>`,
+			want: true,
+		},
+		{
+			name: "closed registration is unavailable",
+			text: `<html><body><p>Регистрация закрыта</p></body></html>`,
+		},
+		{
+			name: "sold out tickets are unavailable",
+			text: `<html><body><p>Билеты закончились</p></body></html>`,
+		},
+		{
+			name: "unavailable phrase has priority",
+			text: `<html><body><button>Зарегистрироваться</button><p>Регистрация окончена</p></body></html>`,
+		},
+		{
+			name: "service tags are ignored",
+			text: `<html><head><style>.button:after{content:"Купить билет"}</style></head><body><p>Описание события</p><script>register()</script><noscript>Зарегистрироваться</noscript></body></html>`,
+		},
+		{
+			name: "plain text is supported",
+			text: `Registration is open for this event`,
+			want: true,
+		},
+		{
+			name: "empty text is unavailable",
+			text: "",
+		},
+		{
+			name: "context cancelled",
+			text: `<html><body>Зарегистрироваться</body></html>`,
+			ctx: func() context.Context {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return ctx
+			},
+			wantError: domain.ErrContextCancelled,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := context.Background()
+			if tt.ctx != nil {
+				ctx = tt.ctx()
+			}
+
+			got, err := newParser(t).IsAvailableToRegister(ctx, tt.text)
+			if !errors.Is(err, tt.wantError) {
+				t.Fatalf("expected error %v, got %v", tt.wantError, err)
+			}
+
+			if got != tt.want {
+				t.Fatalf("expected availability %t, got %t", tt.want, got)
+			}
+		})
+	}
+}

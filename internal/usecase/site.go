@@ -36,3 +36,33 @@ func (uc *Usecase) AnalyzeSite(ctx context.Context, rawURL string) (*domain.Site
 
 	return siteInfo, nil
 }
+
+func (uc *Usecase) CheckSiteAvailability(ctx context.Context, rawURL string) (bool, error) {
+	log := uc.log.With().Str("method", "CheckSiteAvailability").Str("url", rawURL).Logger()
+
+	trimmedURL := strings.TrimSpace(rawURL)
+	if trimmedURL == "" {
+		log.Error().Msg("Analyze site url is empty")
+		return false, domain.ErrEmptyParameter
+	}
+
+	parsedURL, err := url.ParseRequestURI(trimmedURL)
+	if err != nil || parsedURL.Scheme == "" || parsedURL.Host == "" {
+		log.Error().Err(err).Str("url", trimmedURL).Msg("Analyze site url is invalid")
+		return false, domain.ErrURLParse
+	}
+
+	htmlStruct, err := uc.siteWorkerRepo.FetchSiteStruct(ctx, parsedURL.String())
+	if err != nil {
+		log.Error().Err(err).Str("url", trimmedURL).Msg("Failed to fetch site structure")
+		return false, domain.ErrCollectStruct
+	}
+
+	isAvailable, err := uc.siteParserRepo.IsAvailableToRegister(ctx, htmlStruct)
+	if err != nil {
+		log.Error().Err(err).Str("url", trimmedURL).Msg("Failed to check site availability")
+		return false, domain.ErrParseStruct
+	}
+
+	return isAvailable, nil
+}

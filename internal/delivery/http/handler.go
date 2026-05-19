@@ -72,6 +72,15 @@ func (h *Handler) GetSiteInfo(c *gin.Context) {
 		return
 	}
 
+	// TODO: добавить в отдельный метод потом
+	isAvailable, err := h.uc.CheckSiteAvailability(c.Request.Context(), rawURL)
+	if err != nil {
+		h.log.Error().Err(err).Str("url", rawURL).Msg("Check site availability request failed")
+		
+	} else {
+		h.log.Info().Str("url", rawURL).Bool("is_available", isAvailable).Msg("SITE AVAILABILITY CHECKED")
+	}
+
 	c.JSON(http.StatusOK, siteInfoResponse{
 		URL:         rawURL,
 		Title:       info.Title,
