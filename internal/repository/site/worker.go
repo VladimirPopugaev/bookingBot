@@ -14,7 +14,6 @@ import (
 const (
 	defaultTimeout            = 5 * time.Second
 	defaultMonitoringInterval = 60 * time.Second
-	textPreviewLimit          = 200
 )
 
 type worker struct {
@@ -78,8 +77,8 @@ func (c *Config) validate(log zerolog.Logger) error {
 	return nil
 }
 
-func (w *worker) FetchSiteStruct(ctx context.Context, fetchUrl string) (string, error) {
-	log := w.log.With().Str("method", "FetchSiteStruct").Str("target_url", fetchUrl).Logger()
+func (w *worker) FetchSiteStruct(ctx context.Context, fetchURL string) (string, error) {
+	log := w.log.With().Str("method", "FetchSiteStruct").Str("target_url", fetchURL).Logger()
 	collector := w.collector.Clone()
 
 	var (
@@ -105,7 +104,7 @@ func (w *worker) FetchSiteStruct(ctx context.Context, fetchUrl string) (string, 
 		logEvent.Msg("Fetch site html failed")
 	})
 
-	if err := collector.Visit(fetchUrl); err != nil {
+	if err := collector.Visit(fetchURL); err != nil {
 		log.Error().Err(err).Msg("Visit site html failed")
 		return "", domain.ErrCollectStruct
 	}
