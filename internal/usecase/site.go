@@ -7,18 +7,18 @@ import (
 	"strings"
 )
 
-func (uc *Usecase) AnalyzeSite(ctx context.Context, rawURL string) (*domain.SiteInfo, error) {
-	log := uc.log.With().Str("method", "AnalyzeSite").Str("url", rawURL).Logger()
+func (uc *Usecase) CheckSiteForRegistration(ctx context.Context, siteURL string) (*domain.SiteInfo, error) {
+	log := uc.log.With().Str("method", "CheckSiteForRegistration").Str("url", siteURL).Logger()
 
-	trimmedURL := strings.TrimSpace(rawURL)
+	trimmedURL := strings.TrimSpace(siteURL)
 	if trimmedURL == "" {
-		log.Error().Msg("Analyze site url is empty")
+		log.Error().Msg("Check site for registration url is empty")
 		return nil, domain.ErrEmptyParameter
 	}
 
 	parsedURL, err := url.ParseRequestURI(trimmedURL)
 	if err != nil || parsedURL.Scheme == "" || parsedURL.Host == "" {
-		log.Error().Err(err).Str("url", trimmedURL).Msg("Analyze site url is invalid")
+		log.Error().Err(err).Str("url", trimmedURL).Msg("Check site for registration url is invalid")
 		return nil, domain.ErrURLParse
 	}
 
@@ -34,35 +34,14 @@ func (uc *Usecase) AnalyzeSite(ctx context.Context, rawURL string) (*domain.Site
 		return nil, domain.ErrParseStruct
 	}
 
-	return siteInfo, nil
-}
-
-func (uc *Usecase) CheckSiteAvailability(ctx context.Context, rawURL string) (bool, error) {
-	log := uc.log.With().Str("method", "CheckSiteAvailability").Str("url", rawURL).Logger()
-
-	trimmedURL := strings.TrimSpace(rawURL)
-	if trimmedURL == "" {
-		log.Error().Msg("Analyze site url is empty")
-		return false, domain.ErrEmptyParameter
-	}
-
-	parsedURL, err := url.ParseRequestURI(trimmedURL)
-	if err != nil || parsedURL.Scheme == "" || parsedURL.Host == "" {
-		log.Error().Err(err).Str("url", trimmedURL).Msg("Analyze site url is invalid")
-		return false, domain.ErrURLParse
-	}
-
-	htmlStruct, err := uc.siteWorkerRepo.FetchSiteStruct(ctx, parsedURL.String())
-	if err != nil {
-		log.Error().Err(err).Str("url", trimmedURL).Msg("Failed to fetch site structure")
-		return false, domain.ErrCollectStruct
-	}
-
 	isAvailable, err := uc.siteParserRepo.IsAvailableToRegister(ctx, htmlStruct)
 	if err != nil {
-		log.Error().Err(err).Str("url", trimmedURL).Msg("Failed to check site availability")
-		return false, domain.ErrParseStruct
+		log.Error().Err(err).Str("url", trimmedURL).Msg("Failed to check site registration availability")
+		return nil, domain.ErrParseStruct
 	}
 
-	return isAvailable, nil
+	siteInfo.URL = parsedURL.String()
+	siteInfo.IsRegistrationAvailable = isAvailable
+
+	return siteInfo, nil
 }

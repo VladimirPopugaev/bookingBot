@@ -5,15 +5,12 @@ import (
 	"context"
 	"io"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/rs/zerolog"
 	"golang.org/x/net/html"
 )
 
 var (
-	defaultTextPreviewLength = 200
-
 	unavailableRegistrationPhrases = []string{
 		"регистрация закрыта",
 		"регистрация окончена",
@@ -60,16 +57,15 @@ func (r *repository) ParseSiteStruct(ctx context.Context, htmlReader io.Reader) 
 	log := r.log.With().Str("method", "ParseSiteStruct").Logger()
 
 	tokenizer := html.NewTokenizer(htmlReader)
-	info := &domain.SiteInfo{}
+	info := &domain.SiteInfo{
+		IsRegistrationAvailable: false,
+	}
 
 	var (
 		isInsideTitle bool
 		isInsideH1    bool
-		depthLevel    int
 	)
-
-	previewBuilder := strings.Builder{}
-	previewBuilder.Grow(defaultTextPreviewLength)
+	pageTitle := ""
 
 	for {
 		select {
@@ -89,8 +85,9 @@ func (r *repository) ParseSiteStruct(ctx context.Context, htmlReader io.Reader) 
 			}
 
 			info.Title = strings.TrimSpace(info.Title)
-			info.H1 = strings.TrimSpace(info.H1)
-			info.TextPreview = strings.TrimSpace(previewBuilder.String())
+			if info.Title == "" {
+				info.Title = strings.TrimSpace(pageTitle)
+			}
 
 			log.Trace().Msg("Parsed site struct successfully")
 			return info, nil
@@ -102,13 +99,9 @@ func (r *repository) ParseSiteStruct(ctx context.Context, htmlReader io.Reader) 
 			case "title":
 				isInsideTitle = true
 			case "h1":
-				if info.H1 == "" {
+				if info.Title == "" {
 					isInsideH1 = true
 				}
-			case "a":
-				info.LinksCount++
-			case "script", "style", "noscript":
-				depthLevel++
 			}
 
 		case html.EndTagToken:
@@ -119,36 +112,21 @@ func (r *repository) ParseSiteStruct(ctx context.Context, htmlReader io.Reader) 
 				isInsideTitle = false
 			case "h1":
 				isInsideH1 = false
-			case "script", "style", "noscript":
-				if depthLevel > 0 {
-					depthLevel--
-				}
-			}
-
-		case html.SelfClosingTagToken:
-			if tokenizer.Token().DataAtom.String() == "a" {
-				info.LinksCount++
 			}
 
 		case html.TextToken:
-			if depthLevel > 0 {
-				continue
-			}
-
 			text := normalizeHTMLText(string(tokenizer.Text()))
 			if text == "" {
 				continue
 			}
 
-			if isInsideTitle {
+			if isInsideH1 {
 				info.Title = appendSentencePart(info.Title, text)
 			}
 
-			if isInsideH1 {
-				info.H1 = appendSentencePart(info.H1, text)
+			if isInsideTitle {
+				pageTitle = appendSentencePart(pageTitle, text)
 			}
-
-			appendPreviewText(&previewBuilder, text, defaultTextPreviewLength)
 		}
 	}
 }
@@ -250,46 +228,6 @@ func appendSentencePart(current string, next string) string {
 	}
 
 	return current + " " + next
-}
-
-func appendPreviewText(builder *strings.Builder, text string, limit int) {
-	if utf8.RuneCountInString(builder.String()) >= limit || text == "" {
-		return
-	}
-
-	remaining := limit - utf8.RuneCountInString(builder.String())
-	if builder.Len() > 0 {
-		if remaining == 0 {
-			return
-		}
-
-		builder.WriteByte(' ')
-		remaining--
-	}
-
-	if remaining <= 0 {
-		return
-	}
-
-	if utf8.RuneCountInString(text) > remaining {
-		builder.WriteString(truncateRunes(text, remaining))
-		return
-	}
-
-	builder.WriteString(text)
-}
-
-func truncateRunes(text string, limit int) string {
-	if limit <= 0 {
-		return ""
-	}
-
-	runes := []rune(text)
-	if len(runes) <= limit {
-		return text
-	}
-
-	return string(runes[:limit])
 }
 
 func (r *repository) Close() error {

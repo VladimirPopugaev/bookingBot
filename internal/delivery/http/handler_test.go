@@ -12,20 +12,15 @@ import (
 )
 
 type stubUsecase struct {
-	analyzeFunc               func(ctx context.Context, rawURL string) (*domain.SiteInfo, error)
-	checkSiteAvailabilityFunc func(ctx context.Context, rawURL string) (bool, error)
+	checkSiteForRegistrationFunc func(ctx context.Context, rawURL string) (*domain.SiteInfo, error)
 }
 
-func (s stubUsecase) AnalyzeSite(ctx context.Context, rawURL string) (*domain.SiteInfo, error) {
-	return s.analyzeFunc(ctx, rawURL)
-}
-
-func (s stubUsecase) CheckSiteAvailability(ctx context.Context, rawURL string) (bool, error) {
-	if s.checkSiteAvailabilityFunc == nil {
-		return false, nil
+func (s stubUsecase) CheckSiteForRegistration(ctx context.Context, rawURL string) (*domain.SiteInfo, error) {
+	if s.checkSiteForRegistrationFunc == nil {
+		return nil, nil
 	}
 
-	return s.checkSiteAvailabilityFunc(ctx, rawURL)
+	return s.checkSiteForRegistrationFunc(ctx, rawURL)
 }
 
 func (s stubUsecase) Close() {}
@@ -39,8 +34,8 @@ func TestHandler_GetSiteInfo(t *testing.T) {
 		t.Parallel()
 
 		router := NewRouter(stubUsecase{
-			analyzeFunc: func(ctx context.Context, rawURL string) (*domain.SiteInfo, error) {
-				t.Fatal("AnalyzeSite must not be called when url is missing")
+			checkSiteForRegistrationFunc: func(ctx context.Context, rawURL string) (*domain.SiteInfo, error) {
+				t.Fatal("CheckSiteForRegistration must not be called when url is missing")
 				return nil, nil
 			},
 		}, &logger)
@@ -59,7 +54,7 @@ func TestHandler_GetSiteInfo(t *testing.T) {
 		t.Parallel()
 
 		router := NewRouter(stubUsecase{
-			analyzeFunc: func(ctx context.Context, rawURL string) (*domain.SiteInfo, error) {
+			checkSiteForRegistrationFunc: func(ctx context.Context, rawURL string) (*domain.SiteInfo, error) {
 				return nil, domain.ErrURLParse
 			},
 		}, &logger)
@@ -78,12 +73,11 @@ func TestHandler_GetSiteInfo(t *testing.T) {
 		t.Parallel()
 
 		router := NewRouter(stubUsecase{
-			analyzeFunc: func(ctx context.Context, rawURL string) (*domain.SiteInfo, error) {
+			checkSiteForRegistrationFunc: func(ctx context.Context, rawURL string) (*domain.SiteInfo, error) {
 				return &domain.SiteInfo{
-					Title:       "Mock Title",
-					H1:          "Mock H1",
-					LinksCount:  3,
-					TextPreview: "Mock preview for https://example.com",
+					URL:                     "https://example.com",
+					Title:                   "Mock Title",
+					IsRegistrationAvailable: true,
 				}, nil
 			},
 		}, &logger)
@@ -97,7 +91,7 @@ func TestHandler_GetSiteInfo(t *testing.T) {
 			t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
 		}
 
-		var response siteInfoResponse
+		var response domain.SiteInfoResponse
 		if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
 			t.Fatalf("failed to parse response: %v", err)
 		}
@@ -108,6 +102,10 @@ func TestHandler_GetSiteInfo(t *testing.T) {
 
 		if response.Title != "Mock Title" {
 			t.Fatalf("expected title %q, got %q", "Mock Title", response.Title)
+		}
+
+		if !response.IsRegistrationAvailable {
+			t.Fatal("expected registration availability to be true")
 		}
 	})
 }

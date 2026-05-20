@@ -35,9 +35,12 @@ func (s *stubSiteWorkerRepository) Close() error {
 
 type stubSiteParserRepository struct {
 	parseFn func(ctx context.Context, htmlReader io.Reader) (*domain.SiteInfo, error)
+	checkFn func(ctx context.Context, text string) (bool, error)
 
-	parseCalls     int
-	lastParsedHTML string
+	parseCalls      int
+	lastParsedHTML  string
+	checkCalls      int
+	lastCheckedHTML string
 }
 
 func (s *stubSiteParserRepository) ParseSiteStruct(ctx context.Context, htmlReader io.Reader) (*domain.SiteInfo, error) {
@@ -57,27 +60,36 @@ func (s *stubSiteParserRepository) ParseSiteStruct(ctx context.Context, htmlRead
 }
 
 func (s *stubSiteParserRepository) IsAvailableToRegister(ctx context.Context, text string) (bool, error) {
-	return false, nil
+	s.checkCalls++
+	s.lastCheckedHTML = text
+
+	if s.checkFn == nil {
+		return false, nil
+	}
+
+	return s.checkFn(ctx, text)
 }
 
 func (s *stubSiteParserRepository) Close() error {
 	return nil
 }
 
-func TestUsecase_AnalyzeSite(t *testing.T) {
+func TestUsecase_CheckSiteForRegistration(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name           string
-		rawURL         string
-		workerRepo     *stubSiteWorkerRepository
-		parserRepo     *stubSiteParserRepository
-		wantErr        error
-		wantInfo       *domain.SiteInfo
-		wantFetchCalls int
-		wantParseCalls int
-		wantFetchURL   string
-		wantParsedHTML string
+		name            string
+		rawURL          string
+		workerRepo      *stubSiteWorkerRepository
+		parserRepo      *stubSiteParserRepository
+		wantErr         error
+		wantInfo        *domain.SiteInfo
+		wantFetchCalls  int
+		wantParseCalls  int
+		wantCheckCalls  int
+		wantFetchURL    string
+		wantParsedHTML  string
+		wantCheckedHTML string
 	}{
 		{
 			name:           "empty url",
@@ -87,6 +99,7 @@ func TestUsecase_AnalyzeSite(t *testing.T) {
 			wantErr:        domain.ErrEmptyParameter,
 			wantFetchCalls: 0,
 			wantParseCalls: 0,
+			wantCheckCalls: 0,
 		},
 		{
 			name:           "invalid url",
@@ -96,6 +109,7 @@ func TestUsecase_AnalyzeSite(t *testing.T) {
 			wantErr:        domain.ErrURLParse,
 			wantFetchCalls: 0,
 			wantParseCalls: 0,
+			wantCheckCalls: 0,
 		},
 		{
 			name:   "fetch site structure failed",
@@ -109,6 +123,7 @@ func TestUsecase_AnalyzeSite(t *testing.T) {
 			wantErr:        domain.ErrCollectStruct,
 			wantFetchCalls: 1,
 			wantParseCalls: 0,
+			wantCheckCalls: 0,
 			wantFetchURL:   "https://example.com/path?q=1",
 		},
 		{
@@ -127,8 +142,35 @@ func TestUsecase_AnalyzeSite(t *testing.T) {
 			wantErr:        domain.ErrParseStruct,
 			wantFetchCalls: 1,
 			wantParseCalls: 1,
+			wantCheckCalls: 0,
 			wantFetchURL:   "https://example.com/path?q=1",
 			wantParsedHTML: "<html><body>payload</body></html>",
+		},
+		{
+			name:   "availability check failed",
+			rawURL: " https://example.com/path?q=1 ",
+			workerRepo: &stubSiteWorkerRepository{
+				fetchFn: func(ctx context.Context, fetchURL string) (string, error) {
+					return "<html><body>payload</body></html>", nil
+				},
+			},
+			parserRepo: &stubSiteParserRepository{
+				parseFn: func(ctx context.Context, htmlReader io.Reader) (*domain.SiteInfo, error) {
+					return &domain.SiteInfo{
+						Title: "Example",
+					}, nil
+				},
+				checkFn: func(ctx context.Context, text string) (bool, error) {
+					return false, errors.New("check failed")
+				},
+			},
+			wantErr:         domain.ErrParseStruct,
+			wantFetchCalls:  1,
+			wantParseCalls:  1,
+			wantCheckCalls:  1,
+			wantFetchURL:    "https://example.com/path?q=1",
+			wantParsedHTML:  "<html><body>payload</body></html>",
+			wantCheckedHTML: "<html><body>payload</body></html>",
 		},
 		{
 			name:   "success",
@@ -141,23 +183,24 @@ func TestUsecase_AnalyzeSite(t *testing.T) {
 			parserRepo: &stubSiteParserRepository{
 				parseFn: func(ctx context.Context, htmlReader io.Reader) (*domain.SiteInfo, error) {
 					return &domain.SiteInfo{
-						Title:       "Example",
-						H1:          "Booking",
-						LinksCount:  3,
-						TextPreview: "payload preview",
+						Title: "Example",
 					}, nil
+				},
+				checkFn: func(ctx context.Context, text string) (bool, error) {
+					return true, nil
 				},
 			},
 			wantInfo: &domain.SiteInfo{
-				Title:       "Example",
-				H1:          "Booking",
-				LinksCount:  3,
-				TextPreview: "payload preview",
+				Title:                   "Example",
+				URL:                     "https://example.com/path?q=1",
+				IsRegistrationAvailable: true,
 			},
-			wantFetchCalls: 1,
-			wantParseCalls: 1,
-			wantFetchURL:   "https://example.com/path?q=1",
-			wantParsedHTML: "<html><body>payload</body></html>",
+			wantFetchCalls:  1,
+			wantParseCalls:  1,
+			wantCheckCalls:  1,
+			wantFetchURL:    "https://example.com/path?q=1",
+			wantParsedHTML:  "<html><body>payload</body></html>",
+			wantCheckedHTML: "<html><body>payload</body></html>",
 		},
 	}
 
@@ -170,7 +213,7 @@ func TestUsecase_AnalyzeSite(t *testing.T) {
 				t.Fatalf("expected no error creating usecase, got %v", err)
 			}
 
-			info, err := uc.AnalyzeSite(context.Background(), tt.rawURL)
+			info, err := uc.CheckSiteForRegistration(context.Background(), tt.rawURL)
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("expected error %v, got %v", tt.wantErr, err)
 			}
@@ -197,12 +240,20 @@ func TestUsecase_AnalyzeSite(t *testing.T) {
 				t.Fatalf("expected parse calls %d, got %d", tt.wantParseCalls, tt.parserRepo.parseCalls)
 			}
 
+			if tt.parserRepo.checkCalls != tt.wantCheckCalls {
+				t.Fatalf("expected availability check calls %d, got %d", tt.wantCheckCalls, tt.parserRepo.checkCalls)
+			}
+
 			if tt.workerRepo.lastFetchURL != tt.wantFetchURL {
 				t.Fatalf("expected fetch URL %q, got %q", tt.wantFetchURL, tt.workerRepo.lastFetchURL)
 			}
 
 			if tt.parserRepo.lastParsedHTML != tt.wantParsedHTML {
 				t.Fatalf("expected parsed HTML %q, got %q", tt.wantParsedHTML, tt.parserRepo.lastParsedHTML)
+			}
+
+			if tt.parserRepo.lastCheckedHTML != tt.wantCheckedHTML {
+				t.Fatalf("expected checked HTML %q, got %q", tt.wantCheckedHTML, tt.parserRepo.lastCheckedHTML)
 			}
 		})
 	}

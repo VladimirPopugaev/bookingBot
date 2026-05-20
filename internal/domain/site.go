@@ -1,8 +1,14 @@
 package domain
 
 type SiteInfo struct {
-	Title       string
-    H1          string
-    LinksCount  int
-    TextPreview string
+	Title                   string
+	URL                     string
+	IsRegistrationAvailable bool
+}
+
+type ReadSiteInfoReq struct {
+	ID                      int
+	Title                   *string
+	URL                     string
+	IsRegistrationAvailable *bool
 }

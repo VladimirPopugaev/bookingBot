@@ -59,21 +59,16 @@ func TestRepository_ParseSiteStruct(t *testing.T) {
 			t.Fatalf("expected no error, got %v", err)
 		}
 
-		if info.Title != "Booking Page" {
-			t.Fatalf("expected title %q, got %q", "Booking Page", info.Title)
+		if info.Title != "Main Booking" {
+			t.Fatalf("expected title %q, got %q", "Main Booking", info.Title)
 		}
 
-		if info.H1 != "Main Booking" {
-			t.Fatalf("expected h1 %q, got %q", "Main Booking", info.H1)
+		if info.URL != "" {
+			t.Fatalf("expected empty url, got %q", info.URL)
 		}
 
-		if info.LinksCount != 2 {
-			t.Fatalf("expected links count %d, got %d", 2, info.LinksCount)
-		}
-
-		const expectedPreview = "Booking Page Main Booking Find the best option for your stay. One Two"
-		if info.TextPreview != expectedPreview {
-			t.Fatalf("expected preview %q, got %q", expectedPreview, info.TextPreview)
+		if info.IsRegistrationAvailable {
+			t.Fatal("expected registration availability to be false")
 		}
 	})
 
@@ -110,37 +105,22 @@ func TestRepository_ParseSiteStruct(t *testing.T) {
 		}
 	})
 
-	t.Run("ignores service tags and limits preview", func(t *testing.T) {
+	t.Run("falls back to title when h1 is missing", func(t *testing.T) {
 		t.Parallel()
 
-		longText := strings.Repeat("word ", 120)
-		html := "<html><head><title>Big Page</title><noscript>hidden text</noscript></head><body>" +
-			"<h1>Header</h1>" +
-			"<script>script text should be ignored</script>" +
-			"<style>.x{content:'ignored';}</style>" +
-			"<p>" + longText + "</p>" +
-			"<a href='/1'/>" +
-			"</body></html>"
+		html := "<html><head><title>Big Page</title></head><body><p>Body text</p></body></html>"
 
 		info, err := newParser(t).ParseSiteStruct(context.Background(), strings.NewReader(html))
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
 
-		if info.LinksCount != 1 {
-			t.Fatalf("expected links count %d, got %d", 1, info.LinksCount)
+		if info.Title != "Big Page" {
+			t.Fatalf("expected title %q, got %q", "Big Page", info.Title)
 		}
 
-		if strings.Contains(info.TextPreview, "ignored") || strings.Contains(info.TextPreview, "hidden text") {
-			t.Fatalf("expected preview to skip service tags, got %q", info.TextPreview)
-		}
-
-		if len([]rune(info.TextPreview)) != defaultTextPreviewLength {
-			t.Fatalf("expected preview length %d, got %d", defaultTextPreviewLength, len([]rune(info.TextPreview)))
-		}
-
-		if !strings.HasPrefix(info.TextPreview, "Big Page Header word word") {
-			t.Fatalf("unexpected preview prefix: %q", info.TextPreview)
+		if info.IsRegistrationAvailable {
+			t.Fatal("expected registration availability to be false")
 		}
 	})
 }

@@ -15,19 +15,6 @@ type Handler struct {
 	log *zerolog.Logger
 }
 
-type siteInfoResponse struct {
-	URL         string `json:"url"`
-	Title       string `json:"title"`
-	H1          string `json:"h1"`
-	LinksCount  int    `json:"linksCount"`
-	TextPreview string `json:"textPreview"`
-}
-
-type errorResponse struct {
-	Error   string `json:"error"`
-	Details string `json:"details,omitempty"`
-}
-
 func NewRouter(uc domain.Usecase, logger *zerolog.Logger) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 
@@ -46,46 +33,35 @@ func NewRouter(uc domain.Usecase, logger *zerolog.Logger) *gin.Engine {
 func (h *Handler) GetSiteInfo(c *gin.Context) {
 	rawURL := c.Query("url")
 	if rawURL == "" {
-		c.JSON(http.StatusBadRequest, errorResponse{
+		c.JSON(http.StatusBadRequest, domain.ErrorResponse{
 			Error:   "bad_request",
 			Details: "query parameter url is required",
 		})
 		return
 	}
 
-	info, err := h.uc.AnalyzeSite(c.Request.Context(), rawURL)
+	info, err := h.uc.CheckSiteForRegistration(c.Request.Context(), rawURL)
 	if err != nil {
-		h.log.Error().Err(err).Str("url", rawURL).Msg("Analyze site request failed")
+		h.log.Error().Err(err).Str("url", rawURL).Msg("Check site for registration request failed")
 
 		if errors.Is(err, domain.ErrEmptyParameter) || errors.Is(err, domain.ErrURLParse) || errors.Is(err, domain.ErrInvalidParameter) {
-			c.JSON(http.StatusBadRequest, errorResponse{
+			c.JSON(http.StatusBadRequest, domain.ErrorResponse{
 				Error:   "bad_request",
 				Details: err.Error(),
 			})
 			return
 		}
 
-		c.JSON(http.StatusInternalServerError, errorResponse{
+		c.JSON(http.StatusInternalServerError, domain.ErrorResponse{
 			Error:   "internal_error",
 			Details: err.Error(),
 		})
 		return
 	}
 
-	// TODO: добавить в отдельный метод потом
-	isAvailable, err := h.uc.CheckSiteAvailability(c.Request.Context(), rawURL)
-	if err != nil {
-		h.log.Error().Err(err).Str("url", rawURL).Msg("Check site availability request failed")
-		
-	} else {
-		h.log.Info().Str("url", rawURL).Bool("is_available", isAvailable).Msg("SITE AVAILABILITY CHECKED")
-	}
-
-	c.JSON(http.StatusOK, siteInfoResponse{
-		URL:         rawURL,
-		Title:       info.Title,
-		H1:          info.H1,
-		LinksCount:  info.LinksCount,
-		TextPreview: info.TextPreview,
+	c.JSON(http.StatusOK, domain.SiteInfoResponse{
+		URL:                     info.URL,
+		Title:                   info.Title,
+		IsRegistrationAvailable: info.IsRegistrationAvailable,
 	})
 }

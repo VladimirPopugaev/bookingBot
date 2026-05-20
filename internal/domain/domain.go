@@ -9,8 +9,7 @@ import (
 )
 
 type Usecase interface {
-	AnalyzeSite(ctx context.Context, rawURL string) (*SiteInfo, error)
-	CheckSiteAvailability(ctx context.Context, rawURL string) (bool, error)
+	CheckSiteForRegistration(ctx context.Context, rawURL string) (*SiteInfo, error)
 	Close()
 }
 
@@ -39,4 +38,10 @@ type DatabaseRepository interface {
 	Builder() squirrel.StatementBuilderType
 	Ping(ctx context.Context) error
 	Close()
+}
+
+type SiteStorageRepository interface {
+	Create(ctx context.Context, siteInfo *SiteInfo) (int, error)
+	Read(ctx context.Context, siteInfo *ReadSiteInfoReq) (*SiteInfo, error)
+	Delete(ctx context.Context, id int) error
 }

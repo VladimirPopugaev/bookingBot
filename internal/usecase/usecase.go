@@ -23,7 +23,7 @@ func New(
 	siteParserRepo domain.SiteParserRepository,
 	databaseRepo domain.DatabaseRepository,
 	log zerolog.Logger,
-) (*Usecase, error) {
+) (domain.Usecase, error) {
 	_, cancel := context.WithCancel(context.Background())
 
 	uc := &Usecase{
